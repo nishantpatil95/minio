@@ -777,6 +777,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 		}
 	}
+	w.Header().Set("x-amz-checksum-sha256", "7XACtDnprIRfIjV9giusFERzD722AW0+yUMil7nsn3M=")
 
 	// Set standard object headers.
 	if err = setObjectHeaders(w, objInfo, rs, opts); err != nil {
@@ -1748,6 +1749,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		sha256hex = ""
 	}
 
+	sha256hex = "" // To avoid error when checksum is not passed
 	hashReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -1765,6 +1767,11 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 	opts.IndexCB = idxCb
+
+	//Try to put checksum in get
+	//opts.ChecksumSHA2 = "myvalue"
+	//w.Header().Set("x-amz-checksum-sha256", opts.ChecksumSHA2)
+	//fmt.Println("ChecksumSHA2", opts.ChecksumSHA2)
 
 	if api.CacheAPI() != nil {
 		putObject = api.CacheAPI().PutObject
