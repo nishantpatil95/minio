@@ -778,6 +778,23 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 		}
 	}
 
+	sha256 := objInfo.UserDefined["X-Amz-Meta-CustomSha256Key"] // Take checksum from metadata
+	//logger.Error(fmt.Sprintf("sha256 HO %v", sha256))
+	w.Header().Set("x-amz-checksum-sha256", sha256) //Put it in HeadObjectOutput
+	//r.Header.Del("X-Amz-Meta-ChecksumCustom")
+
+	//checksum256 := r.Header.Get("x-amz-checksum-sha256")
+
+	//logger.Error(fmt.Sprintf("checksum256 HO %v", checksum256))
+	//logger.Error(fmt.Sprintf("AmzContentSha256  HO %v", r.Header.Get(xhttp.AmzContentSha256)))
+
+	//_, fileName, line, _ := runtime.Caller(0)
+	//location := fmt.Sprintf("F:%s L:%d\n", fileName, line)
+	//logger.Error(fmt.Sprintf("%s objInfo.ChecksumSHA2  HO %#v", location, objInfo))
+	delete(objInfo.UserDefined, "X-Amz-Meta-CustomSha256Key") //Remove from metadata
+	//_, fileName, line, _ = runtime.Caller(0)
+	//location = fmt.Sprintf("F:%s L:%d\n", fileName, line)
+	//logger.Error(fmt.Sprintf("%s objInfo.ChecksumSHA2  HO %#v", location, objInfo))
 	// Set standard object headers.
 	if err = setObjectHeaders(w, objInfo, rs, opts); err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
@@ -1748,12 +1765,23 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		sha256hex = ""
 	}
 
+	//logger.Error(fmt.Sprintf("sha256 %v ", sha256hex))
+	sha256hex = "" // To avoid error when checksum is not passed
 	hashReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
+	sha256 := r.Header.Get("x-amz-checksum-sha256") // Take checksum from PutObjectInput
+	//w.Header().Set("X-Amz-Meta-ChecksumCustom", sha256)
+
+	//checksum256 := r.Header.Get(strings.ToLower(xhttp.AmzContentSha256))
+	//logger.Error(fmt.Sprintf("checksum256 PO%v", checksum256))
+	//checksum2562 := r.Header.Get("x-amz-checksum-sha256")
+	//logger.Error(fmt.Sprintf("checksum2562 PO %v", checksum2562))
+
+	//logger.Error(fmt.Sprintf("sha256 %v from %v", string(hashReader.SHA256()), len(hashReader.SHA256())))
 	rawReader := hashReader
 	pReader := NewPutObjReader(rawReader)
 
@@ -1766,6 +1794,14 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 	opts.IndexCB = idxCb
 
+	//Try to put checksum in get
+	//opts.ChecksumSHA2 = "myvalue"
+
+	//w.Header().Set("x-amz-checksum-sha256", r.Header.Get("x-amz-checksum-sha256"))
+	//w.Header().Set(xhttp.AmzContentSha256, r.Header.Get(xhttp.AmzContentSha256))
+	//logger.Error(fmt.Sprintf("AmzContentSha256  put %v", r.Header.Get(xhttp.AmzContentSha256)))
+	//fmt.Println("ChecksumSHA2", opts.ChecksumSHA2)
+	//logger.Error(fmt.Sprintf("sha256 %v from %v", string(pReader.rawReader.SHA256()), len(pReader.rawReader.SHA256())))
 	if api.CacheAPI() != nil {
 		putObject = api.CacheAPI().PutObject
 	}
@@ -1835,6 +1871,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Ensure that metadata does not contain sensitive information
 	crypto.RemoveSensitiveEntries(metadata)
+	metadata["X-Amz-Meta-CustomSha256Key"] = sha256
 
 	os := newObjSweeper(bucket, object).WithVersioning(opts.Versioned, opts.VersionSuspended)
 	if !globalTierConfigMgr.Empty() {
@@ -1852,6 +1889,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	//_, fileName, line, _ := runtime.Caller(0)
+	//location := fmt.Sprintf("F:%s L:%d\n", fileName, line)
+	//logger.Error(fmt.Sprintf("%s objInfo.ChecksumSHA2  HO %#v", location, objInfo))
 	if r.Header.Get(xMinIOExtract) == "true" && strings.HasSuffix(object, archiveExt) {
 		opts := ObjectOptions{VersionID: objInfo.VersionID, MTime: objInfo.ModTime}
 		if _, err := updateObjectMetadataWithZipInfo(ctx, objectAPI, bucket, object, opts); err != nil {
